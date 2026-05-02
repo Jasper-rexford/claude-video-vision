@@ -3,13 +3,17 @@ import type { AudioResult, TranscriptionSegment } from "../types.js";
 import { formatHMS } from "../utils/timestamps.js";
 
 export async function transcribeWithOpenAI(wavPath: string): Promise<AudioResult> {
-  const apiKey = process.env.OPENAI_API_KEY;
+  const useGroq = !!process.env.GROQ_API_KEY;
+  const apiKey = useGroq ? process.env.GROQ_API_KEY : process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    throw new Error("OPENAI_API_KEY environment variable is not set. Run video_setup to configure.");
+    throw new Error("GROQ_API_KEY or OPENAI_API_KEY environment variable is not set. Run video_setup to configure.");
   }
 
   const OpenAI = (await import("openai")).default;
-  const client = new OpenAI({ apiKey });
+  const client = new OpenAI({
+    apiKey,
+    ...(useGroq && { baseURL: "https://api.groq.com/openai/v1" }),
+  });
 
   const audioFile = new File(
     [readFileSync(wavPath)],
@@ -18,7 +22,7 @@ export async function transcribeWithOpenAI(wavPath: string): Promise<AudioResult
   );
 
   const response = await client.audio.transcriptions.create({
-    model: "whisper-1",
+    model: useGroq ? "whisper-large-v3-turbo" : "whisper-1",
     file: audioFile,
     response_format: "verbose_json",
     timestamp_granularities: ["segment"],
